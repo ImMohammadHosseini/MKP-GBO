@@ -67,21 +67,31 @@ class StatePrepare:
         
         return self.allocated_matrix
         
-        
-    def getKnapsack (self, index) -> Knapsack:
-        return self.caps[index]
-    
-    def getObservedInst (self, index):
-        return self.stateWeightValues[index]
-    
-    def getInstWeight (self, index):
-        return self.weights[index]
-    
-    def getInstValue (self, index):
-        return self.values[index]
     
     def is_terminated (self):
         pass
     
-    def updateMatrix (self, acts):
+    def updateMatrix (self, decision):
         pass
+    
+    def getScore (self, decision):
+        score = 0
+        full_part = np.zeros_like(self.caps)
+        for inst_id, ks_id in decision:
+            weight = self.weights[inst_id]
+            value = self.values[inst_id]
+            cap = self.caps[ks_id]
+            remain_cap = cap - full_part[ks_id]
+            
+            if remain_cap >= weight:
+                full_part[ks_id] += weight
+                score += value
+        return score
+            
+            
+            
+            
+            
+            
+            
+            
