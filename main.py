@@ -16,6 +16,7 @@ from data.dataProducer import multiObjectiveDimentional
 from solver.src.data_structure.state_prepare_ import StatePrepare
 from solver.src.models.mlp import MLP
 from solver.gbo import GBO
+from solver.src.models.train import sac_train
 
 usage = "usage: python main.py -D <dim> -M <knapsaks> -N <instances>"
 
@@ -67,16 +68,22 @@ def dataInitializer ():
                                         INSTANCE_NUM)
     return statePrepare
 
-def init(statePrepare):
+def init():
     row = math.ceil(INSTANCE_NUM/KNAPSACK_NUM) * KNAPSACK_NUM
     model = MLP(row, 2*opts.dim+KNAPSACK_NUM+2) 
-    solver = GBO(model,statePrepare, KNAPSACK_NUM, SAVE_PATH, True)
+    solver = GBO(model, INSTANCE_NUM, KNAPSACK_NUM, SAVE_PATH)
     
     return solver
-def solve_step ():
-    solver.run_GBO()
+
+def solve_step (statePrepare):
+    observed_tensor = torch.tensor(statePrepare.getObservation()).float()
+    decision = solver.run_GBO(observed_tensor)
+    score = statePrepare.getScore(decision)
+    print(score)
+    return score    
     
 if __name__ == '__main__':
+    sac_train()
     statePrepare = dataInitializer()
-    solver = init(statePrepare)
-    solve_step()
+    solver = init()
+    solve_step(statePrepare)
