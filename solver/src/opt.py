@@ -22,7 +22,7 @@ def opt(observed, model, ksNum):
     fixed_part = deepcopy(observed.data[:,0:-(ksNum+1)])
     while iteration < 200:
         alloc_old = deepcopy(observed.data[:,-(ksNum+1):])
-        z = model(observed)
+        z, _ = model.sample_normal(observed)
         optimizer.zero_grad(); z.backward(); optimizer.step(); scheduler.step()
         observed.data = convertToOneHot(observed.data, fixed_part, ksNum)
         equal = equal + 1 if torch.all(alloc_old.eq(observed.data[:,-(ksNum+1):])) else 0

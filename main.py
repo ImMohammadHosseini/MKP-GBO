@@ -26,8 +26,7 @@ parser.add_option("-D", "--dim", action="store", dest="dim", default=1)
 parser.add_option("-K", "--knapsaks", action="store", dest="kps", default=2)
 parser.add_option("-N", "--instances", action="store", dest="instances", 
                   default=15)
-parser.add_option("-M", "--mode", action="store", dest="mode", 
-                  default='train')
+
 
 opts, args = parser.parse_args()
 
@@ -83,7 +82,11 @@ def solve_step (statePrepare):
     return score    
     
 if __name__ == '__main__':
-    sac_train()
+    
     statePrepare = dataInitializer()
     solver = init()
+    #train phase
+    sac_train(solver.model, statePrepare)
+    
+    #test phase
     solve_step(statePrepare)
