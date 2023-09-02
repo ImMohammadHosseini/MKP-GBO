@@ -40,7 +40,8 @@ class actor_MLP(nn.Module):
         
 
     def forward(self, x):
-        x = x.flatten()
+        x = x.flatten(start_dim=1)
+
         x = self.mlp(x)
         
         mu = self.mu(x)
@@ -63,6 +64,9 @@ class actor_MLP(nn.Module):
         action = torch.sigmoid(actions).to(self.device)
         log_probs = probabilities.log_prob(actions)
         log_probs -= torch.log(1-action.pow(2)+self.reparam_noise)
+        log_probs= log_probs.unsqueeze(-1)
+        #print(log_probs.size())
+        #print(log_probs)
         log_probs = log_probs.sum(1, keepdim=True)
 
         return action, log_probs
@@ -93,7 +97,7 @@ class Value(nn.Module):
         self.outer = nn.Linear(input_dim, 1, device=self.device)
         
     def forward(self, observation):
-        observation = observation.flatten()
+        observation = observation.flatten(start_dim=1)
         observation = self.mlp(observation)
         observation = self.outer(observation)
         return observation
@@ -111,7 +115,7 @@ class Critic(nn.Module):
         self.device = device
         
         modules = []
-        input_dim = rowNum * colNum
+        input_dim = rowNum * colNum + 1
         for h_dim in hidden_dims:
             modules.append(
                 nn.Sequential(
@@ -120,11 +124,10 @@ class Critic(nn.Module):
             )
             input_dim = h_dim
         self.mlp = nn.Sequential(*modules).to(self.device)
-        
         self.outer = nn.Linear(input_dim, 1, device=self.device)
         
     def forward(self, observation, action):
-        observation = observation.flatten()
+        observation = observation.flatten(start_dim=1)
         observation = torch.cat([observation, action], dim=1)
         observation = self.mlp(observation)
         observation = self.outer(observation)

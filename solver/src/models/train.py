@@ -4,18 +4,21 @@
 """
 import sys
 import os
+from os import path, makedirs
 
 import torch
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from RL_trainer.env_ import KnapsackAssignmentEnv
-from RL_trainer.sac import SAC
+from .RL_trainer.env_ import KnapsackAssignmentEnv
+from .RL_trainer.sac import SAC
 
 def save_model(model, save_path):
-	file_path = save_path + "/" + model.name + ".ckpt"
-	torch.save({
+    if not path.exists(save_path):
+        makedirs(save_path)
+    file_path = save_path + "/" + model.name + ".ckpt"
+    torch.save({
         'model_state_dict': model.state_dict()}, 
         file_path)
 
@@ -43,7 +46,7 @@ def plot_learning_curve(x, scores, figure_file, title, label):#TODO delete metho
     
 def sac_train(model, statePrepares, save_path):
     env = KnapsackAssignmentEnv()
-    trainer = SAC()
+    trainer = SAC(model)
     
     #stateprepares = np.array(stateprepares)
     best_score = 0
@@ -56,8 +59,12 @@ def sac_train(model, statePrepares, save_path):
             observation, _ = env.reset()
             done = False
             while not done:
+                #print(observation.size())
+                observation.requires_grad = True#self.
                 action = trainer.step_act(observation)
-                observation_, reward, done, info = env.step(action)
+                observation_, reward, done, info = env.step(observation, action, trainer.actor_model)
+                observation.requires_grad = False 
+
                 trainer.save_step(observation, action, reward, observation_, done)
                 trainer.train()
                 observation = observation_

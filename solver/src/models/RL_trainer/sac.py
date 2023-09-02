@@ -15,6 +15,7 @@ class SAC():
         batch_size: int = 32,
         tau: float = 0.005,
         gamma: float = 0.99,
+        scale: int = 2,
     ):
         self.actor_model = actor_model
         self.critic_model1 = Critic(self.actor_model.rowNum, self.actor_model.colNum,
@@ -36,16 +37,17 @@ class SAC():
         self.value_optimizer2 = Adam(self.value_model2.parameters(), 
                                       lr=0.001)
         self.batch_size = batch_size
-        self. tau = tau
-        
+        self.tau = tau
+        self.gamma = gamma
+        self.scale = scale
         #Replay buffer
-        self.buffer_size= 1e6
+        self.buffer_size= int(1e6)
         self._transitions_stored = 0
         
-        self.memory_observation = np.zeros((self.buffer_size))
+        self.memory_observation = np.zeros((self.buffer_size,16,6))
         self.memory_action = np.zeros(self.buffer_size)
         self.memory_reward = np.zeros(self.buffer_size)
-        self.memory_newObservation = np.zeros((self.buffer_size,))
+        self.memory_newObservation = np.zeros((self.buffer_size,16,6))
         self.memory_done = np.zeros(self.buffer_size, dtype=np.bool)
         self.weights = np.zeros(self.buffer_size)
         
@@ -58,7 +60,6 @@ class SAC():
         done: bool, 
     ):
         index = self._transitions_stored % self.buffer_size
-
         self.memory_observation[index] = observation
         self.memory_newObservation[index] = new_observation
         self.memory_action[index] = action
@@ -86,26 +87,28 @@ class SAC():
         self,
         observation: torch.tensor, 
     ):
-        action, _ = self.actor_model.sample_normal(observation)
-        return action
+        action, _ = self.actor_model.sample_normal(observation.unsqueeze(0))
+        return action.squeeze(0)
     
     def train (
         self,
     ):
+        #torch.autograd.set_detect_anomaly(True)
+
         if self._transitions_stored < self.batch_size:
             return
 
         observations, mactions, rewards, new_observations, dones = \
-                self.memory.sample_buffer(self.batch_size)
+                self.sample_buffer()
 
-        observations = torch.tensor(observations, dtype=torch.float).to(self.actor.device)
-        mactions = torch.tensor(mactions, dtype=torch.float).to(self.actor.device)
-        rewards = torch.tensor(rewards, dtype=torch.float).to(self.actor.device)
-        new_observations = torch.tensor(new_observations, dtype=torch.float).to(self.actor.device)
-        dones = torch.tensor(dones).to(self.actor.device)
+        observations = torch.tensor(observations, dtype=torch.float).to(self.actor_model.device)
+        mactions = torch.tensor(mactions, dtype=torch.float).to(self.actor_model.device)
+        rewards = torch.tensor(rewards, dtype=torch.float).to(self.actor_model.device)
+        new_observations = torch.tensor(new_observations, dtype=torch.float).to(self.actor_model.device)
+        dones = torch.tensor(dones).to(self.actor_model.device)
         
         values = self.value_model1(observations).view(-1)
-        new_values = self.target_value(new_observations).view(-1)
+        new_values = self.value_model2(new_observations).view(-1)
         new_values[dones] = 0.0
 
         actions, log_probs = self.actor_model.sample_normal(observations, reparameterize=False)
@@ -121,7 +124,7 @@ class SAC():
         value_loss.backward(retain_graph=True)
         self.value_optimizer2.step()
 
-        actions, log_probs = self.actor.sample_normal(observations, reparameterize=True)
+        actions, log_probs = self.actor_model.sample_normal(observations, reparameterize=True)
         log_probs = log_probs.view(-1)
         q1_new_policy = self.critic_model1.forward(observations, actions)
         q2_new_policy = self.critic_model2.forward(observations, actions)
@@ -134,18 +137,24 @@ class SAC():
         actor_loss.backward(retain_graph=True)
         self.actor_optimizer.step()
 
-        self.critic_model1.optimizer.zero_grad()
-        self.critic_optimizer2.zero_grad()
+        
         q_hat = self.scale*rewards + self.gamma*new_values
-        q1_old_policy = self.critic_1.forward(observations, mactions).view(-1)
-        q2_old_policy = self.critic_2.forward(observations, mactions).view(-1)
+        q1_old_policy = self.critic_model1.forward(observations, mactions.unsqueeze(1)).view(-1)
+        q2_old_policy = self.critic_model2.forward(observations, mactions.unsqueeze(1)).view(-1)
         critic_1_loss = 0.5 * mse_loss(q1_old_policy, q_hat)
         critic_2_loss = 0.5 * mse_loss(q2_old_policy, q_hat)
 
-        critic_loss = critic_1_loss + critic_2_loss
+        critic_loss = (critic_1_loss + critic_2_loss).detach()
+        critic_loss.requires_grad=True
+        self.critic_optimizer1.zero_grad()
+        self.critic_optimizer2.zero_grad()
+        #print(critic_loss)
         critic_loss.backward()
+        #print('f')
+
         self.critic_optimizer1.step()
         self.critic_optimizer2.step()
+        #print('ff')
 
         self.update_network_parameters()
     
@@ -153,11 +162,11 @@ class SAC():
         if tau is None:
             tau = self.tau
 
-        target_value_params = self.value_model2.named_parameters()
-        value_params = self.value_model1.named_parameters()
+        value_params2 = self.value_model2.named_parameters()
+        value_params1 = self.value_model1.named_parameters()
 
-        target_value_state_dict = dict(target_value_params)
-        value_state_dict = dict(value_params)
+        target_value_state_dict = dict(value_params2)
+        value_state_dict = dict(value_params1)
 
         for name in value_state_dict:
             value_state_dict[name] = tau*value_state_dict[name].clone() + \
