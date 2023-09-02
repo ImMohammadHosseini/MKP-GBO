@@ -46,7 +46,7 @@ class StatePrepare:
         else: self.instanceObsSize = i_obs_size
         
         self.allocated_matrix = None
-        self.pad_len = 0
+        #self.pad_len = 0
         
     def reset (self) -> None:
         self.allocated_matrix = None
@@ -55,15 +55,20 @@ class StatePrepare:
         self.knapsacks = [Knapsack(i, c) for i, c in enumerate(allCapacities)]
     
     def getObservation (self) -> np.ndarray:
-        if self.allocated_matrix == None:
+        if not isinstance(self.allocated_matrix, np.ndarray):#self.allocated_matrix == None:
             ks_rep = math.ceil(len(self.weights)/len(self.caps))
             row = ks_rep * len(self.caps)
             alloc_part = np.array([[0]*len(self.caps)+[1]]*row)
             inst_pad = np.array([[0]*(len(self.weights[0])+1)]*(row-len(self.weights)))
+            #print(alloc_part.shape)
+            #print(inst_pad.shape)
+            #print(self.weights.shape, self.values.shape)
             self.allocated_matrix = np.append(np.append(np.append(np.append(self.weights, 
                                                                             self.values,1),
                                                                   inst_pad,0),
                                                         np.repeat(self.caps,ks_rep, 0),1),alloc_part,1)
+            #print(self.allocated_matrix)
+
         
         return self.allocated_matrix
         
@@ -71,8 +76,8 @@ class StatePrepare:
     def is_terminated (self):
         pass
     
-    def updateMatrix (self, decision):
-        pass
+    def updateMatrix (self, new_matrix):
+        self.allocated_matrix = new_matrix.cpu().detach().numpy()
     
     def getScore (self, decision):
         score = 0
